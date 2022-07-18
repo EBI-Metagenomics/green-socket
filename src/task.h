@@ -29,10 +29,12 @@ struct gs_task
         ev_timer timeout;
     } watcher;
 
+    double timeout;
     struct cco_node node;
 };
 
 void gs_task_init(struct gs_task *, double timeout);
+void gs_task_start(struct gs_task *);
 void gs_task_del(struct gs_task const *);
 
 #endif

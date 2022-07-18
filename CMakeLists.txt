@@ -17,7 +17,7 @@ cpmaddpackage(NAME c_toolbelt VERSION 0.3.1 GITHUB_REPOSITORY horta/c-toolbelt)
 cpmaddpackage(NAME cco VERSION 0.0.9 GITHUB_REPOSITORY
               EBI-Metagenomics/c-containers)
 
-add_library(gs src/gs.c src/ctx.c src/task.c)
+add_library(gs src/gs.c src/ctx.c src/task.c src/die.c)
 add_library(GS::gs ALIAS gs)
 target_link_libraries(gs PUBLIC C_TOOLBELT::c_toolbelt)
 target_link_libraries(gs PUBLIC CCO::cco)

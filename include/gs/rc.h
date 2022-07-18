@@ -4,6 +4,9 @@
 enum gs_rc
 {
     GS_OK,
+    GS_EOF,
+    GS_INTR,
+    GS_ERROR,
     GS_NOMEM,
 };
 
