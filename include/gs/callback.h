@@ -1,7 +1,6 @@
 #ifndef GS_CALLBACK_H
 #define GS_CALLBACK_H
 
-#include <stdbool.h>
 #include <stddef.h>
 
 struct gs_ctx;

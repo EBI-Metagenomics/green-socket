@@ -25,6 +25,11 @@ struct gs_task *gs_ctx_pop(struct gs_ctx *ctx)
     return cco_of(cco_queue_pop(&ctx->task.avail), struct gs_task, node);
 }
 
+void gs_ctx_put(struct gs_ctx *ctx, struct gs_task *task)
+{
+    cco_queue_put(&ctx->task.avail, (struct cco_node *)&task->node);
+}
+
 struct gs_ctx *gs_ctx_new(int sockfd, unsigned max_tasks)
 {
     struct gs_ctx *ctx =
@@ -44,10 +49,18 @@ struct gs_ctx *gs_ctx_new(int sockfd, unsigned max_tasks)
     return ctx;
 }
 
-void gs_ctx_del_task(struct gs_ctx *ctx, struct gs_task const *task)
-{
-    cco_queue_put(&ctx->task.avail, (struct cco_node *)&task->node);
-    gs_task_del(task);
-}
+void gs_ctx_del(struct gs_ctx const *ctx) { free((void *)ctx); }
 
-GS_API void gs_ctx_del(struct gs_ctx const *ctx) { free((void *)ctx); }
+struct gs_task *gs_ctx_send(struct gs_ctx *ctx, void *data,
+                            gs_write_cb write_cb, gs_when_done_cb when_done_cb,
+                            double timeout)
+{
+    struct gs_task *task = gs_ctx_pop(ctx);
+    if (!task) return 0;
+    gs_task_init(task, timeout);
+    task->data = data;
+    task->write_cb = write_cb;
+    task->when_done_cb = when_done_cb;
+    gs_task_start(task);
+    return task;
+}

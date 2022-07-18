@@ -124,8 +124,6 @@ void gs_task_start(struct gs_task *task)
     ev_timer_again(loop, &task->watcher.timeout);
 }
 
-void gs_task_del(struct gs_task const *task) { free((void *)task); }
-
 bool gs_task_done(struct gs_task const *task) { return task->done; }
 
 void gs_task_cancel(struct gs_task *task);
@@ -134,13 +132,8 @@ bool gs_task_cancelled(struct gs_task const *task) { return task->cancelled; }
 
 int gs_task_errno(struct gs_task const *task) { return task->errno_value; }
 
-void gs_task_setup_watchers()
+void gs_task_del(struct gs_task const *task)
 {
-    // ev_io_init (&stdin_watcher, stdin_cb, /*STDIN_FILENO*/ 0, EV_READ);
-    // ev_io_start (loop, &stdin_watcher);
-    //
-    // // initialise a timer watcher, then start it
-    // // simple non-repeating 5.5 second timeout
-    // ev_timer_init (&timeout_watcher, timeout_cb, 5.5, 0.);
-    // ev_timer_start (loop, &timeout_watcher);
+    gs_ctx_put(task->ctx, (struct gs_task *)task);
+    free((void *)task);
 }
