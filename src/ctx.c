@@ -44,7 +44,7 @@ struct gs_ctx *gs_ctx_new(int sockfd, unsigned max_tasks)
     cco_queue_init(&ctx->task.avail);
     for (unsigned i = 0; i < max_tasks; ++i)
     {
-        gs_task_init(ctx->task.tasks + i, 0.0);
+        gs_task_init(ctx->task.tasks + i, ctx);
         cco_queue_put(&ctx->task.avail, &ctx->task.tasks[i].node);
     }
 
@@ -63,15 +63,13 @@ void gs_ctx_del(struct gs_ctx const *ctx)
 }
 
 struct gs_task *gs_ctx_send(struct gs_ctx *ctx, void *data,
-                            gs_write_cb write_cb, gs_when_done_cb when_done_cb,
-                            double timeout)
+                            gs_write_cb *write_cb,
+                            gs_when_done_cb *when_done_cb, double timeout)
 {
     struct gs_task *task = gs_ctx_pop(ctx);
     if (!task) return 0;
-    gs_task_init(task, timeout);
-    task->data = data;
-    task->write_cb = write_cb;
-    task->when_done_cb = when_done_cb;
+    gs_task_reset(task, timeout);
+    gs_task_setup_send(task, data, write_cb, when_done_cb);
     gs_task_start(task);
     return task;
 }

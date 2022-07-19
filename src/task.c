@@ -54,7 +54,7 @@ static void read_cb(struct ev_loop *loop, struct ev_io *w, int revents)
     if (EV_ERROR & revents) die("invalid event during read");
     struct gs_task *task = w->data;
 
-    if (!task->read_cb(task, read_fn))
+    if (!(*task->read_cb)(task, read_fn))
     {
         ev_timer_again(loop, &task->watcher.timeout);
     }
@@ -62,17 +62,24 @@ static void read_cb(struct ev_loop *loop, struct ev_io *w, int revents)
     {
         ev_io_stop(loop, &task->watcher.read);
         ev_timer_stop(loop, &task->watcher.timeout);
-        task->when_done_cb(task);
+        (*task->when_done_cb)(task);
     }
 }
 
+#include <stdio.h>
 static void write_cb(struct ev_loop *loop, ev_io *w, int revents)
 {
+    printf("write_cb1\n");
+    fflush(stdout);
     (void)loop;
     if (EV_ERROR & revents) die("invalid event during write");
+    printf("write_cb2\n");
+    fflush(stdout);
     struct gs_task *task = w->data;
 
-    if (!task->write_cb(task, write_fn))
+    printf("write_cb3\n");
+    fflush(stdout);
+    if (!(*task->write_cb)(task, write_fn))
     {
         ev_timer_again(loop, &task->watcher.timeout);
     }
@@ -80,7 +87,7 @@ static void write_cb(struct ev_loop *loop, ev_io *w, int revents)
     {
         ev_io_stop(loop, &task->watcher.read);
         ev_timer_stop(loop, &task->watcher.timeout);
-        task->when_done_cb(task);
+        (*task->when_done_cb)(task);
     }
 }
 
@@ -90,38 +97,87 @@ static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents)
     if (EV_ERROR & revents) die("invalid event during timeout");
     struct gs_task *task = w->data;
 
-    ev_io_stop(loop, &task->watcher.read);
-    ev_io_stop(loop, &task->watcher.write);
-    ev_timer_stop(loop, &task->watcher.timeout);
-    task->when_done_cb(task);
+    gs_task_cancel(task);
 }
 
-void gs_task_init(struct gs_task *task, double timeout)
+void gs_task_init(struct gs_task *task, struct gs_ctx *ctx)
 {
+    task->data = 0;
+
+    task->ctx = ctx;
+
     task->done = false;
     task->cancelled = false;
     task->errno_value = 0;
+
+    task->type = GS_TASK_NOTSET;
 
     task->read_cb = 0;
     task->write_cb = 0;
     task->when_done_cb = 0;
 
-    ev_io_init(&task->watcher.read, read_cb, 0, EV_READ);
-    ev_io_init(&task->watcher.write, write_cb, 0, EV_WRITE);
+    ev_init(&task->watcher.read, read_cb);
+    ev_init(&task->watcher.write, write_cb);
     ev_init(&task->watcher.timeout, timeout_cb);
 
     task->watcher.read.data = task;
     task->watcher.write.data = task;
     task->watcher.timeout.data = task;
 
+    task->timeout = 0.;
+    cco_node_init(&task->node);
+}
+
+void gs_task_reset(struct gs_task *task, double timeout)
+{
+    task->data = 0;
+
+    task->done = false;
+    task->cancelled = false;
+    task->errno_value = 0;
+
+    task->type = GS_TASK_NOTSET;
+
+    task->read_cb = 0;
+    task->write_cb = 0;
+    task->when_done_cb = 0;
+
     task->timeout = timeout;
     cco_node_init(&task->node);
+}
+
+void gs_task_setup_send(struct gs_task *task, void *data, gs_write_cb *write_cb,
+                        gs_when_done_cb *when_done_cb)
+{
+    task->data = data;
+    task->type = GS_TASK_SEND;
+    task->write_cb = write_cb;
+    task->when_done_cb = when_done_cb;
+}
+
+void gs_task_setup_recv(struct gs_task *task, void *data, gs_read_cb *read_cb,
+                        gs_when_done_cb *when_done_cb)
+{
+    task->data = data;
+    task->type = GS_TASK_RECV;
+    task->read_cb = read_cb;
+    task->when_done_cb = when_done_cb;
 }
 
 void gs_task_start(struct gs_task *task)
 {
     task->watcher.timeout.repeat = task->timeout;
     ev_timer_again(loop, &task->watcher.timeout);
+    if (task->type == GS_TASK_SEND)
+    {
+        ev_io_set(&task->watcher.write, gs_ctx_socket(task->ctx), EV_WRITE);
+        ev_io_start(loop, &task->watcher.write);
+    }
+    if (task->type == GS_TASK_RECV)
+    {
+        ev_io_set(&task->watcher.read, gs_ctx_socket(task->ctx), EV_READ);
+        ev_io_start(loop, &task->watcher.read);
+    }
 }
 
 bool gs_task_done(struct gs_task const *task) { return task->done; }
@@ -131,6 +187,7 @@ void gs_task_cancel(struct gs_task *task)
     ev_io_stop(loop, &task->watcher.read);
     ev_io_stop(loop, &task->watcher.write);
     ev_timer_stop(loop, &task->watcher.timeout);
+    task->done = true;
     task->cancelled = true;
 }
 
