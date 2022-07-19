@@ -17,8 +17,12 @@ cpmaddpackage(NAME c_toolbelt VERSION 0.3.1 GITHUB_REPOSITORY horta/c-toolbelt)
 cpmaddpackage(NAME cco VERSION 0.0.9 GITHUB_REPOSITORY
               EBI-Metagenomics/c-containers)
 
-add_library(gs src/gs.c src/ctx.c src/task.c src/die.c)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
+add_library(gs src/gs.c src/ctx.c src/task.c src/die.c src/thread.c)
 add_library(GS::gs ALIAS gs)
+target_link_libraries(gs PRIVATE Threads::Threads)
 target_link_libraries(gs PUBLIC C_TOOLBELT::c_toolbelt)
 target_link_libraries(gs PUBLIC CCO::cco)
 target_link_libraries(gs PUBLIC ev)
@@ -74,7 +78,8 @@ install(FILES ${EXPORT_FILE} ${CONFIG_FILE} DESTINATION include/gs)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README.md
               ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE DESTINATION share/docs/gs)
 
-# enable_testing() add_subdirectory(test)
+enable_testing()
+add_subdirectory(test)
 
 set(CPACK_PACKAGE_NAME gs)
 set(CPACK_PACKAGE_VENDOR "Danilo Horta")

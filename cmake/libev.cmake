@@ -31,11 +31,14 @@ ExternalProject_Add(
   CONFIGURE_COMMAND <SOURCE_DIR>/configure --disable-dependency-tracking
                     --enable-shared=no --prefix=${LIBEV_PREFIX}
   BUILD_COMMAND make
-  INSTALL_COMMAND make install && mkdir ${LIBEV_PREFIX}/include/ev && mv
-                  ${LIBEV_PREFIX}/include/ev.h ${LIBEV_PREFIX}/include/ev/ev.h)
+  INSTALL_COMMAND
+    make install && mkdir ${LIBEV_PREFIX}/include/ev && mv
+    ${LIBEV_PREFIX}/include/ev.h ${LIBEV_PREFIX}/include/ev/ev.h && rm
+    ${LIBEV_PREFIX}/lib/libev.la)
 
 add_library(ev STATIC IMPORTED GLOBAL)
 add_dependencies(ev libev)
-set_target_properties(ev PROPERTIES IMPORTED_LOCATION ${LIBEV_PREFIX}/lib)
+set_target_properties(ev PROPERTIES IMPORTED_LOCATION
+                                    ${LIBEV_PREFIX}/lib/libev.a)
 set_target_properties(ev PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                                     ${LIBEV_PREFIX}/include)
