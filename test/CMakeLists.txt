@@ -2,7 +2,7 @@ set(TMPDIR ${CMAKE_CURRENT_BINARY_DIR}/tmp)
 file(MAKE_DIRECTORY ${TMPDIR})
 
 function(gs_add_test name)
-  add_executable(test_${name} ${name}.c)
+  add_executable(test_${name} ${name}.c conn.c)
   target_link_libraries(test_${name} PRIVATE GS::gs)
   target_compile_features(test_${name} PRIVATE c_std_11)
   target_compile_options(test_${name} PRIVATE ${WARNING_FLAGS})

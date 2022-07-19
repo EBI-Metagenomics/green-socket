@@ -17,3 +17,5 @@ void gs_stop(void)
     ev_break(loop, EVBREAK_ALL);
     gs_thread_join();
 }
+
+void gs_sleep(double seconds) { ev_sleep(seconds); }

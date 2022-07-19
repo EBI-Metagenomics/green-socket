@@ -2,6 +2,7 @@
 #include "cco/cco.h"
 #include "ctx.h"
 #include "gs/rc.h"
+#include "gs/task.h"
 #include "task.h"
 #include <stdlib.h>
 
@@ -40,6 +41,7 @@ struct gs_ctx *gs_ctx_new(int sockfd, unsigned max_tasks)
     ctx->data = 0;
     ctx->sockfd = sockfd;
 
+    cco_queue_init(&ctx->task.avail);
     for (unsigned i = 0; i < max_tasks; ++i)
     {
         gs_task_init(ctx->task.tasks + i, 0.0);
@@ -49,7 +51,16 @@ struct gs_ctx *gs_ctx_new(int sockfd, unsigned max_tasks)
     return ctx;
 }
 
-void gs_ctx_del(struct gs_ctx const *ctx) { free((void *)ctx); }
+void gs_ctx_del(struct gs_ctx const *ctx)
+{
+    struct cco_queue *q = (struct cco_queue *)&ctx->task.avail;
+    while (!cco_queue_empty(&ctx->task.avail))
+    {
+        struct gs_task *t = cco_of(cco_queue_pop(q), struct gs_task, node);
+        gs_task_cancel(t);
+    }
+    free((void *)ctx);
+}
 
 struct gs_task *gs_ctx_send(struct gs_ctx *ctx, void *data,
                             gs_write_cb write_cb, gs_when_done_cb when_done_cb,

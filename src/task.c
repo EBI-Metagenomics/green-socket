@@ -126,7 +126,13 @@ void gs_task_start(struct gs_task *task)
 
 bool gs_task_done(struct gs_task const *task) { return task->done; }
 
-void gs_task_cancel(struct gs_task *task);
+void gs_task_cancel(struct gs_task *task)
+{
+    ev_io_stop(loop, &task->watcher.read);
+    ev_io_stop(loop, &task->watcher.write);
+    ev_timer_stop(loop, &task->watcher.timeout);
+    task->cancelled = true;
+}
 
 bool gs_task_cancelled(struct gs_task const *task) { return task->cancelled; }
 
@@ -135,5 +141,4 @@ int gs_task_errno(struct gs_task const *task) { return task->errno_value; }
 void gs_task_del(struct gs_task const *task)
 {
     gs_ctx_put(task->ctx, (struct gs_task *)task);
-    free((void *)task);
 }
