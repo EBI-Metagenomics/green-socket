@@ -11,7 +11,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(cmake/CPM.cmake)
 include(cmake/compiler-options.cmake)
 include(cmake/sanitizers.cmake)
-include(cmake/libev.cmake)
 
 cpmaddpackage(NAME c_toolbelt VERSION 0.3.1 GITHUB_REPOSITORY horta/c-toolbelt)
 cpmaddpackage(NAME cco VERSION 0.0.9 GITHUB_REPOSITORY
@@ -20,12 +19,20 @@ cpmaddpackage(NAME cco VERSION 0.0.9 GITHUB_REPOSITORY
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_library(gs src/gs.c src/ctx.c src/task.c src/die.c src/loop.c src/sync.c)
+add_library(
+  gs
+  src/ctx.c
+  src/die.c
+  src/libev.c
+  src/gs.c
+  src/loop.c
+  src/sync.c
+  src/task.c)
 add_library(GS::gs ALIAS gs)
 target_link_libraries(gs PRIVATE Threads::Threads)
 target_link_libraries(gs PUBLIC C_TOOLBELT::c_toolbelt)
 target_link_libraries(gs PUBLIC CCO::cco)
-target_link_libraries(gs PUBLIC ev)
+target_include_directories(gs PRIVATE libs/)
 
 set(EXPORT_FILE ${CMAKE_CURRENT_BINARY_DIR}/gs/export.h)
 include(GenerateExportHeader)

@@ -1,66 +1,53 @@
 #include "loop.h"
-#include "debug.h"
 #include "die.h"
-#include "ev/ev.h"
 #include "gs/rc.h"
+#include "libev.h"
 #include "sync.h"
 #include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 
-static struct ev_loop *loop = 0;
 static struct sync *sync = 0;
+static atomic_bool stop = false;
 static ev_async async_watcher = {0};
 static atomic_bool pending_work = false;
 
 static void thread_start(void)
 {
-    debug();
     gs_sync_lock(sync);
-    debug();
-    ev_run(loop, 0);
-    debug();
+    ev_run(0);
     gs_sync_unlock(sync);
-    debug();
 }
 
-static void invoke_pending_work(struct ev_loop *loop)
+static void invoke_pending_work(void)
 {
-    while (ev_pending_count(loop))
+    while (ev_pending_count())
     {
         atomic_store(&pending_work, true);
         gs_sync_wait_signal(sync);
-        atomic_store(&pending_work, false);
     }
 }
 
-static void async_cb(struct ev_loop *loop, ev_async *w, int revents);
+static void async_cb(ev_async *w, int revents);
 
-void lock_cb(struct ev_loop *loop)
-{
-    (void)loop;
-    gs_sync_lock(sync);
-}
+void lock_cb(void) { gs_sync_lock(sync); }
 
-void unlock_cb(struct ev_loop *loop)
-{
-    (void)loop;
-    gs_sync_unlock(sync);
-}
+void unlock_cb(void) { gs_sync_unlock(sync); }
 
-bool gs_loop_init(void)
+bool gs_loop_start(void)
 {
-    loop = EV_DEFAULT;
+    ev_default_loop(0);
+    atomic_store(&stop, false);
     ev_async_init(&async_watcher, async_cb);
-    ev_async_start(loop, &async_watcher);
+    ev_async_start(&async_watcher);
 
-    ev_set_invoke_pending_cb(loop, invoke_pending_work);
-    ev_set_loop_release_cb(loop, unlock_cb, lock_cb);
+    ev_set_invoke_pending_cb(invoke_pending_work);
+    ev_set_loop_release_cb(unlock_cb, lock_cb);
 
     if (!(sync = gs_sync_init(thread_start)))
     {
-        ev_async_stop(loop, &async_watcher);
+        ev_async_stop(&async_watcher);
         return false;
     }
 
@@ -72,7 +59,8 @@ bool gs_loop_has_work(void) { return atomic_load(&pending_work); }
 void gs_loop_work(void)
 {
     gs_sync_lock(sync);
-    ev_invoke_pending(loop);
+    ev_invoke_pending();
+    atomic_store(&pending_work, false);
     gs_sync_signal(sync);
     gs_sync_unlock(sync);
 }
@@ -80,56 +68,52 @@ void gs_loop_work(void)
 void gs_loop_stop(void)
 {
     gs_sync_lock(sync);
-    ev_async_stop(loop, &async_watcher);
+    atomic_store(&stop, true);
+    ev_async_send(&async_watcher);
     gs_sync_unlock(sync);
-    /* TODO: wait condition, with timeout, to exit cleanly */
-    // pthread_cond_timedwait
-    ev_sleep(2.);
+    while (!gs_loop_has_work())
+        ev_sleep(0.01);
+    gs_loop_work();
+    ev_sleep(0.01);
+    gs_loop_work();
+    ev_sleep(0.01);
+    gs_loop_work();
+    ev_sleep(0.01);
+    gs_loop_work();
+    ev_sleep(0.01);
+    gs_loop_work();
+    gs_sync_join(sync);
 }
 
-void gs_loop_del(void)
+void gs_loop_io_start(struct ev_io *w)
 {
     gs_sync_lock(sync);
-    gs_sync_cancel(sync);
+    ev_io_start(w);
+    ev_async_send(&async_watcher);
     gs_sync_unlock(sync);
-    gs_sync_del(sync);
 }
 
-void gs_loop_ev_io_start(struct ev_io *w)
+void gs_loop_io_stop_within(struct ev_io *w) { ev_io_stop(w); }
+
+void gs_loop_timer_again(struct ev_timer *w)
 {
     gs_sync_lock(sync);
-    ev_io_start(loop, w);
-    ev_async_send(loop, &async_watcher);
+    ev_timer_again(w);
+    ev_async_send(&async_watcher);
     gs_sync_unlock(sync);
 }
 
-void gs_loop_ev_io_stop(struct ev_io *w)
-{
-    gs_sync_lock(sync);
-    ev_io_stop(loop, w);
-    ev_async_send(loop, &async_watcher);
-    gs_sync_unlock(sync);
-}
+void gs_loop_timer_again_within(struct ev_timer *w) { ev_timer_again(w); }
 
-void gs_loop_ev_timer_again(struct ev_timer *w)
-{
-    gs_sync_lock(sync);
-    ev_timer_again(loop, w);
-    ev_async_send(loop, &async_watcher);
-    gs_sync_unlock(sync);
-}
+void gs_loop_timer_stop_within(struct ev_timer *w) { ev_timer_stop(w); }
 
-void gs_loop_ev_timer_stop(struct ev_timer *w)
+static void async_cb(ev_async *w, int events)
 {
-    gs_sync_lock(sync);
-    ev_timer_stop(loop, w);
-    ev_async_send(loop, &async_watcher);
-    gs_sync_unlock(sync);
-}
-
-static void async_cb(struct ev_loop *l, ev_async *w, int events)
-{
-    (void)l;
     (void)w;
     if (EV_ERROR & events) die("invalid event during async_cb");
+    if (atomic_load(&stop))
+    {
+        ev_async_stop(w);
+        ev_break(EVBREAK_ONE);
+    }
 }

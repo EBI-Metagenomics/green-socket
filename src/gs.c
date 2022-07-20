@@ -1,26 +1,16 @@
 #include "gs/gs.h"
-#include "debug.h"
-#include "ev/ev.h"
+#include "libev.h"
 #include "loop.h"
 
-bool gs_init(void) { return gs_loop_init(); }
+bool gs_start(void) { return gs_loop_start(); }
 
-void gs_stop(void)
-{
-    gs_loop_stop();
-    gs_work();
-    gs_loop_del();
-}
+void gs_stop(void) { gs_loop_stop(); }
 
-void gs_work(void)
+bool gs_work(void)
 {
-    debug();
-    while (gs_loop_has_work())
-    {
-        debug();
-        gs_loop_work();
-    }
-    debug();
+    bool had_work = gs_loop_has_work();
+    if (had_work) gs_loop_work();
+    return had_work;
 }
 
 void gs_sleep(double seconds) { ev_sleep(seconds); }

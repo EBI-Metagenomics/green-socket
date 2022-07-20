@@ -6,10 +6,11 @@
 #include "gs/export.h"
 #include "gs/rc.h"
 #include "gs/task.h"
+#include <stdbool.h>
 
-GS_API bool gs_init(void);
+GS_API bool gs_start(void);
 GS_API void gs_stop(void);
-GS_API void gs_work(void);
+GS_API bool gs_work(void);
 GS_API void gs_sleep(double seconds);
 
 #endif

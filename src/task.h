@@ -2,8 +2,9 @@
 #define TASK_H
 
 #include "cco/cco.h"
-#include "ev/ev.h"
 #include "gs/callback.h"
+#include "libev.h"
+#include <stdatomic.h>
 #include <stdbool.h>
 
 struct gs_ctx;
@@ -22,7 +23,8 @@ struct gs_task
     struct gs_ctx *ctx;
 
     bool done;
-    bool cancelled;
+    atomic_flag cancel_flag;
+    atomic_bool cancelled;
     int errno_value;
 
     enum gs_task_type type;

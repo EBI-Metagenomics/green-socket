@@ -16,9 +16,17 @@ static unsigned echo_port(void)
 
 void test_start_stop(void)
 {
-    if (!gs_init()) ERROR;
-    gs_work();
+    if (!gs_start()) ERROR;
     gs_stop();
+
+    // if (!gs_start()) ERROR;
+    // gs_work();
+    // gs_stop();
+    //
+    // if (!gs_start()) ERROR;
+    // gs_work();
+    // gs_work();
+    // gs_stop();
 }
 
 static enum gs_rc write_cb(struct gs_task *task, gs_write_fn *write_fn)
@@ -55,14 +63,25 @@ void test_send_timeout(void)
     if (!conn) ERROR;
     int sockfd = conn_sockfd(conn);
 
-    if (!gs_init()) ERROR;
+    if (!gs_start()) ERROR;
 
     struct gs_ctx *ctx = gs_ctx_new(sockfd, 2);
     if (!ctx) ERROR;
 
-    struct gs_task *task = gs_ctx_send(ctx, 0, &write_cb, &when_done_cb, 0.1);
+    struct gs_task *task = gs_ctx_send(ctx, 0, &write_cb, &when_done_cb, 0.001);
+    if (gs_task_done(task)) ERROR;
+    if (gs_task_cancelled(task)) ERROR;
 
-    gs_sleep(0.3);
+    unsigned count = 0;
+    while (count < 2)
+    {
+        count += gs_work();
+        printf("count:%d \n", count);
+        gs_sleep(0.01);
+    }
+    printf("Ponto 2\n");
+    fflush(stdout);
+
     if (!gs_task_done(task)) ERROR;
     if (!gs_task_cancelled(task)) ERROR;
 
@@ -78,7 +97,7 @@ void test_send_successfully(void)
     if (!conn) ERROR;
     int sockfd = conn_sockfd(conn);
 
-    if (!gs_init()) ERROR;
+    if (!gs_start()) ERROR;
 
     struct gs_ctx *ctx = gs_ctx_new(sockfd, 2);
     if (!ctx) ERROR;
@@ -98,7 +117,7 @@ void test_send_successfully(void)
 int main(void)
 {
     test_start_stop();
-    // test_send_timeout();
+    test_send_timeout();
     // test_send_successfully();
     return 0;
 }

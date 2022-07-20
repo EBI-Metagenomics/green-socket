@@ -1,7 +1,6 @@
 #include "task.h"
 #include "ctx.h"
 #include "die.h"
-#include "gs.h"
 #include "gs/rc.h"
 #include "gs/task.h"
 #include "loop.h"
@@ -49,52 +48,42 @@ static enum gs_rc write_fn(struct gs_task *task, size_t size, void const *buf,
     return GS_OK;
 }
 
-static void read_cb(struct ev_loop *loop, struct ev_io *w, int revents)
+static void read_cb(struct ev_io *w, int revents)
 {
-    (void)loop;
     if (EV_ERROR & revents) die("invalid event during read");
     struct gs_task *task = w->data;
 
     if (!(*task->read_cb)(task, read_fn))
     {
-        ev_timer_again(loop, &task->watcher.timeout);
+        gs_loop_timer_again_within(&task->watcher.timeout);
     }
     else
     {
-        ev_io_stop(loop, &task->watcher.read);
-        ev_timer_stop(loop, &task->watcher.timeout);
+        gs_loop_io_stop_within(&task->watcher.read);
+        gs_loop_timer_stop_within(&task->watcher.timeout);
         (*task->when_done_cb)(task);
     }
 }
 
-#include <stdio.h>
-static void write_cb(struct ev_loop *loop, ev_io *w, int revents)
+static void write_cb(ev_io *w, int revents)
 {
-    printf("write_cb1\n");
-    fflush(stdout);
-    (void)loop;
     if (EV_ERROR & revents) die("invalid event during write");
-    printf("write_cb2\n");
-    fflush(stdout);
     struct gs_task *task = w->data;
 
-    printf("write_cb3\n");
-    fflush(stdout);
     if (!(*task->write_cb)(task, write_fn))
     {
-        ev_timer_again(loop, &task->watcher.timeout);
+        gs_loop_timer_again_within(&task->watcher.timeout);
     }
     else
     {
-        ev_io_stop(loop, &task->watcher.read);
-        ev_timer_stop(loop, &task->watcher.timeout);
+        gs_loop_io_stop_within(&task->watcher.read);
+        gs_loop_timer_stop_within(&task->watcher.timeout);
         (*task->when_done_cb)(task);
     }
 }
 
-static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents)
+static void timeout_cb(ev_timer *w, int revents)
 {
-    (void)loop;
     if (EV_ERROR & revents) die("invalid event during timeout");
     struct gs_task *task = w->data;
 
@@ -108,6 +97,7 @@ void gs_task_init(struct gs_task *task, struct gs_ctx *ctx)
     task->ctx = ctx;
 
     task->done = false;
+    atomic_flag_clear(&task->cancel_flag);
     task->cancelled = false;
     task->errno_value = 0;
 
@@ -117,9 +107,9 @@ void gs_task_init(struct gs_task *task, struct gs_ctx *ctx)
     task->write_cb = 0;
     task->when_done_cb = 0;
 
-    gs_loop_ev_init(&task->watcher.read, read_cb);
-    gs_loop_ev_init(&task->watcher.write, write_cb);
-    gs_loop_ev_init(&task->watcher.timeout, timeout_cb);
+    gs_loop_init(&task->watcher.read, read_cb);
+    gs_loop_init(&task->watcher.write, write_cb);
+    gs_loop_init(&task->watcher.timeout, timeout_cb);
 
     task->watcher.read.data = task;
     task->watcher.write.data = task;
@@ -134,6 +124,7 @@ void gs_task_reset(struct gs_task *task, double timeout)
     task->data = 0;
 
     task->done = false;
+    atomic_flag_clear(&task->cancel_flag);
     task->cancelled = false;
     task->errno_value = 0;
 
@@ -168,18 +159,17 @@ void gs_task_setup_recv(struct gs_task *task, void *data, gs_read_cb *read_cb,
 void gs_task_start(struct gs_task *task)
 {
     task->watcher.timeout.repeat = task->timeout;
-    gs_loop_ev_timer_again(&task->watcher.timeout);
+    gs_loop_timer_again(&task->watcher.timeout);
     if (task->type == GS_TASK_SEND)
     {
-        gs_loop_ev_io_set(&task->watcher.write, gs_ctx_socket(task->ctx),
-                          EV_WRITE);
-        gs_loop_ev_io_start(&task->watcher.write);
+        gs_loop_io_set(&task->watcher.write, gs_ctx_socket(task->ctx),
+                       EV_WRITE);
+        gs_loop_io_start(&task->watcher.write);
     }
     if (task->type == GS_TASK_RECV)
     {
-        gs_loop_ev_io_set(&task->watcher.read, gs_ctx_socket(task->ctx),
-                          EV_READ);
-        gs_loop_ev_io_start(&task->watcher.read);
+        gs_loop_io_set(&task->watcher.read, gs_ctx_socket(task->ctx), EV_READ);
+        gs_loop_io_start(&task->watcher.read);
     }
 }
 
@@ -187,11 +177,14 @@ bool gs_task_done(struct gs_task const *task) { return task->done; }
 
 void gs_task_cancel(struct gs_task *task)
 {
-    gs_loop_ev_io_stop(&task->watcher.read);
-    gs_loop_ev_io_stop(&task->watcher.write);
-    gs_loop_ev_timer_stop(&task->watcher.timeout);
-    task->done = true;
+    if (atomic_flag_test_and_set(&task->cancel_flag)) return;
     task->cancelled = true;
+
+    if (task->type == GS_TASK_SEND)
+        gs_loop_io_stop_within(&task->watcher.write);
+    if (task->type == GS_TASK_RECV) gs_loop_io_stop_within(&task->watcher.read);
+    gs_loop_timer_stop_within(&task->watcher.timeout);
+    task->done = true;
 }
 
 bool gs_task_cancelled(struct gs_task const *task) { return task->cancelled; }

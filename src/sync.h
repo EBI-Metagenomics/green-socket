@@ -8,7 +8,6 @@ void gs_sync_lock(struct sync *sync);
 void gs_sync_unlock(struct sync *sync);
 void gs_sync_signal(struct sync *sync);
 void gs_sync_wait_signal(struct sync *sync);
-void gs_sync_cancel(struct sync *sync);
-void gs_sync_del(struct sync const *sync);
+void gs_sync_join(struct sync *sync);
 
 #endif
