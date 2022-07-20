@@ -1,4 +1,5 @@
 #include "sync.h"
+#include "debug.h"
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -18,9 +19,11 @@ static void cond_del(pthread_cond_t *);
 
 static void *start_routine(void *arg)
 {
+    debug();
     struct sync *sync = arg;
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, 0);
     sync->start_fn();
+    debug();
     return 0;
 }
 
@@ -42,7 +45,7 @@ struct sync *gs_sync_init(void (*start_fn)(void))
 
     if (pthread_create(&sync.tid, 0, start_routine, &sync))
     {
-        gs_sync_cleanup(&sync);
+        gs_sync_del(&sync);
         return 0;
     }
 
@@ -66,7 +69,9 @@ void gs_sync_wait_signal(struct sync *sync)
     (void)pthread_cond_wait(&sync->cond, &sync->lock);
 }
 
-void gs_sync_cleanup(struct sync const *sync)
+void gs_sync_cancel(struct sync *sync) { (void)pthread_cancel(sync->tid); }
+
+void gs_sync_del(struct sync const *sync)
 {
     struct sync *s = (struct sync *)sync;
     mutex_del(&s->lock);

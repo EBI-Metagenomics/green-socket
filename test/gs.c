@@ -18,7 +18,6 @@ void test_start_stop(void)
 {
     if (!gs_init()) ERROR;
     gs_work();
-    gs_sleep(1.0);
     gs_stop();
 }
 

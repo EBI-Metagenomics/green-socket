@@ -1,4 +1,5 @@
 #include "loop.h"
+#include "debug.h"
 #include "die.h"
 #include "ev/ev.h"
 #include "gs/rc.h"
@@ -13,20 +14,15 @@ static struct sync *sync = 0;
 static ev_async async_watcher = {0};
 static atomic_bool pending_work = false;
 
-#include <stdio.h>
 static void thread_start(void)
 {
-    printf("loop:thread_start 1\n");
-    fflush(stdout);
+    debug();
     gs_sync_lock(sync);
-    printf("loop:thread_start 2\n");
-    fflush(stdout);
+    debug();
     ev_run(loop, 0);
-    printf("loop:thread_start 3\n");
-    fflush(stdout);
+    debug();
     gs_sync_unlock(sync);
-    printf("loop:thread_start 4\n");
-    fflush(stdout);
+    debug();
 }
 
 static void invoke_pending_work(struct ev_loop *loop)
@@ -81,7 +77,23 @@ void gs_loop_work(void)
     gs_sync_unlock(sync);
 }
 
-void gs_loop_cleanup(void) { gs_sync_cleanup(sync); }
+void gs_loop_stop(void)
+{
+    gs_sync_lock(sync);
+    ev_async_stop(loop, &async_watcher);
+    gs_sync_unlock(sync);
+    /* TODO: wait condition, with timeout, to exit cleanly */
+    // pthread_cond_timedwait
+    ev_sleep(2.);
+}
+
+void gs_loop_del(void)
+{
+    gs_sync_lock(sync);
+    gs_sync_cancel(sync);
+    gs_sync_unlock(sync);
+    gs_sync_del(sync);
+}
 
 void gs_loop_ev_io_start(struct ev_io *w)
 {

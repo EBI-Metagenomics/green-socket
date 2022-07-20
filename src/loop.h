@@ -7,7 +7,8 @@
 bool gs_loop_init(void);
 bool gs_loop_has_work(void);
 void gs_loop_work(void);
-void gs_loop_cleanup(void);
+void gs_loop_stop(void);
+void gs_loop_del(void);
 
 #define gs_loop_ev_init(ev, cb_) ev_init((ev), (cb_))
 #define gs_loop_ev_io_set(ev, fd_, events_) ev_io_set((ev), (fd_), (events_))
