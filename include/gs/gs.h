@@ -7,9 +7,9 @@
 #include "gs/rc.h"
 #include "gs/task.h"
 
-GS_API void gs_init(void);
-GS_API enum gs_rc gs_start(void);
+GS_API bool gs_init(void);
 GS_API void gs_stop(void);
+GS_API void gs_work(void);
 GS_API void gs_sleep(double seconds);
 
 #endif

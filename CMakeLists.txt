@@ -20,7 +20,7 @@ cpmaddpackage(NAME cco VERSION 0.0.9 GITHUB_REPOSITORY
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_library(gs src/gs.c src/ctx.c src/task.c src/die.c src/thread.c)
+add_library(gs src/gs.c src/ctx.c src/task.c src/die.c src/loop.c src/sync.c)
 add_library(GS::gs ALIAS gs)
 target_link_libraries(gs PRIVATE Threads::Threads)
 target_link_libraries(gs PUBLIC C_TOOLBELT::c_toolbelt)

@@ -1,21 +1,15 @@
 #include "gs/gs.h"
-#include "ctx.h"
 #include "ev/ev.h"
-#include "task.h"
-#include "thread.h"
+#include "loop.h"
 
-struct ev_loop *loop = 0;
+bool gs_init(void) { return gs_loop_init(); }
 
-static void thread_start(void) { ev_run(loop, 0); }
+void gs_stop(void) {}
 
-void gs_init(void) { loop = EV_DEFAULT; }
-
-enum gs_rc gs_start(void) { return gs_thread_create(&thread_start); }
-
-void gs_stop(void)
+void gs_work(void)
 {
-    ev_break(loop, EVBREAK_ALL);
-    gs_thread_join();
+    while (gs_loop_has_work())
+        gs_loop_work();
 }
 
 void gs_sleep(double seconds) { ev_sleep(seconds); }

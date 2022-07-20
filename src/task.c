@@ -4,6 +4,7 @@
 #include "gs.h"
 #include "gs/rc.h"
 #include "gs/task.h"
+#include "loop.h"
 #include "socket_include.h"
 #include <errno.h>
 #include <stdlib.h>
@@ -116,9 +117,9 @@ void gs_task_init(struct gs_task *task, struct gs_ctx *ctx)
     task->write_cb = 0;
     task->when_done_cb = 0;
 
-    ev_init(&task->watcher.read, read_cb);
-    ev_init(&task->watcher.write, write_cb);
-    ev_init(&task->watcher.timeout, timeout_cb);
+    gs_loop_ev_init(&task->watcher.read, read_cb);
+    gs_loop_ev_init(&task->watcher.write, write_cb);
+    gs_loop_ev_init(&task->watcher.timeout, timeout_cb);
 
     task->watcher.read.data = task;
     task->watcher.write.data = task;
@@ -167,16 +168,18 @@ void gs_task_setup_recv(struct gs_task *task, void *data, gs_read_cb *read_cb,
 void gs_task_start(struct gs_task *task)
 {
     task->watcher.timeout.repeat = task->timeout;
-    ev_timer_again(loop, &task->watcher.timeout);
+    gs_loop_ev_timer_again(&task->watcher.timeout);
     if (task->type == GS_TASK_SEND)
     {
-        ev_io_set(&task->watcher.write, gs_ctx_socket(task->ctx), EV_WRITE);
-        ev_io_start(loop, &task->watcher.write);
+        gs_loop_ev_io_set(&task->watcher.write, gs_ctx_socket(task->ctx),
+                          EV_WRITE);
+        gs_loop_ev_io_start(&task->watcher.write);
     }
     if (task->type == GS_TASK_RECV)
     {
-        ev_io_set(&task->watcher.read, gs_ctx_socket(task->ctx), EV_READ);
-        ev_io_start(loop, &task->watcher.read);
+        gs_loop_ev_io_set(&task->watcher.read, gs_ctx_socket(task->ctx),
+                          EV_READ);
+        gs_loop_ev_io_start(&task->watcher.read);
     }
 }
 
@@ -184,9 +187,9 @@ bool gs_task_done(struct gs_task const *task) { return task->done; }
 
 void gs_task_cancel(struct gs_task *task)
 {
-    ev_io_stop(loop, &task->watcher.read);
-    ev_io_stop(loop, &task->watcher.write);
-    ev_timer_stop(loop, &task->watcher.timeout);
+    gs_loop_ev_io_stop(&task->watcher.read);
+    gs_loop_ev_io_stop(&task->watcher.write);
+    gs_loop_ev_timer_stop(&task->watcher.timeout);
     task->done = true;
     task->cancelled = true;
 }

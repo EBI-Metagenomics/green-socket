@@ -16,8 +16,9 @@ static unsigned echo_port(void)
 
 void test_start_stop(void)
 {
-    if (gs_start()) ERROR;
-    gs_sleep(10.1);
+    if (!gs_init()) ERROR;
+    gs_work();
+    gs_sleep(1.0);
     gs_stop();
 }
 
@@ -55,7 +56,7 @@ void test_send_timeout(void)
     if (!conn) ERROR;
     int sockfd = conn_sockfd(conn);
 
-    if (gs_start()) ERROR;
+    if (!gs_init()) ERROR;
 
     struct gs_ctx *ctx = gs_ctx_new(sockfd, 2);
     if (!ctx) ERROR;
@@ -78,7 +79,7 @@ void test_send_successfully(void)
     if (!conn) ERROR;
     int sockfd = conn_sockfd(conn);
 
-    if (gs_start()) ERROR;
+    if (!gs_init()) ERROR;
 
     struct gs_ctx *ctx = gs_ctx_new(sockfd, 2);
     if (!ctx) ERROR;
