@@ -3,6 +3,7 @@
 
 #include "cco/cco.h"
 #include "gs/callback.h"
+#include "gs/rc.h"
 #include "libev.h"
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -19,6 +20,7 @@ enum gs_task_type
 struct gs_task
 {
     void *data;
+    enum gs_rc retcode;
 
     struct gs_ctx *ctx;
 

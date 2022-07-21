@@ -32,6 +32,7 @@ static enum gs_rc read_fn(struct gs_task *task, size_t size, void *buf,
 static enum gs_rc write_fn(struct gs_task *task, size_t size, void const *buf,
                            size_t *size_written)
 {
+    if (size == 0) return GS_INVAL;
     task->errno_value = 0;
 
     ssize_t sz = write(gs_ctx_socket(task->ctx), buf, size);
@@ -49,20 +50,41 @@ static enum gs_rc write_fn(struct gs_task *task, size_t size, void const *buf,
     return GS_OK;
 }
 
+static void task_set_retcode(struct gs_task *task, enum gs_rc rc)
+{
+    task->retcode = rc;
+}
+
+static void task_finish(struct gs_task *task)
+{
+    if (task->type == GS_TASK_SEND)
+        gs_loop_io_stop_within(&task->watcher.write);
+    if (task->type == GS_TASK_RECV) gs_loop_io_stop_within(&task->watcher.read);
+    gs_loop_timer_stop_within(&task->watcher.timeout);
+    task->done = true;
+    (*task->when_done_cb)(task);
+    task->active = false;
+}
+
 static void read_cb(struct ev_io *w, int revents)
 {
     if (EV_ERROR & revents) die("invalid event during read");
     struct gs_task *task = w->data;
 
-    if (!(*task->read_cb)(task, read_fn))
+    enum gs_rc rc = (*task->read_cb)(task, read_fn);
+    if (rc)
     {
         debug();
-        gs_loop_timer_again_within(&task->watcher.timeout);
+        task_set_retcode(task, rc);
+        if (rc == GS_EOF)
+            task_finish(task);
+        else
+            gs_task_cancel(task);
     }
     else
     {
         debug();
-        gs_task_cancel(task);
+        gs_loop_timer_again_within(&task->watcher.timeout);
     }
 }
 
@@ -71,15 +93,20 @@ static void write_cb(ev_io *w, int revents)
     if (EV_ERROR & revents) die("invalid event during write");
     struct gs_task *task = w->data;
 
-    if (!(*task->write_cb)(task, write_fn))
+    enum gs_rc rc = (*task->write_cb)(task, write_fn);
+    if (rc)
     {
         debug();
-        gs_loop_timer_again_within(&task->watcher.timeout);
+        task_set_retcode(task, rc);
+        if (rc == GS_EOF)
+            task_finish(task);
+        else
+            gs_task_cancel(task);
     }
     else
     {
         debug();
-        gs_task_cancel(task);
+        gs_loop_timer_again_within(&task->watcher.timeout);
     }
 }
 
@@ -95,6 +122,7 @@ static void timeout_cb(ev_timer *w, int revents)
 void gs_task_init(struct gs_task *task, struct gs_ctx *ctx)
 {
     task->data = 0;
+    task->retcode = GS_OK;
 
     task->ctx = ctx;
 
@@ -126,10 +154,10 @@ void gs_task_init(struct gs_task *task, struct gs_ctx *ctx)
 void gs_task_reset(struct gs_task *task, double timeout)
 {
     task->data = 0;
+    task->retcode = GS_OK;
 
     task->active = false;
     task->done = false;
-    debug();
     atomic_flag_clear(&task->cancel_once);
     task->cancelled = false;
     task->errno_value = 0;
@@ -164,6 +192,7 @@ void gs_task_setup_recv(struct gs_task *task, void *data, gs_read_cb *read_cb,
 
 void gs_task_start(struct gs_task *task)
 {
+    debug();
     task->active = true;
     task->watcher.timeout.repeat = task->timeout;
     gs_loop_timer_again(&task->watcher.timeout);
@@ -189,14 +218,7 @@ void gs_task_cancel(struct gs_task *task)
     if (!task->active) return;
     debug();
     task->cancelled = true;
-
-    if (task->type == GS_TASK_SEND)
-        gs_loop_io_stop_within(&task->watcher.write);
-    if (task->type == GS_TASK_RECV) gs_loop_io_stop_within(&task->watcher.read);
-    gs_loop_timer_stop_within(&task->watcher.timeout);
-    task->done = true;
-    (*task->when_done_cb)(task);
-    task->active = false;
+    task_finish(task);
 }
 
 bool gs_task_cancelled(struct gs_task const *task) { return task->cancelled; }

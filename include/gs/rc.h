@@ -8,6 +8,7 @@ enum gs_rc
     GS_INTR,
     GS_ERROR,
     GS_NOMEM,
+    GS_INVAL,
 };
 
 #endif

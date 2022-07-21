@@ -24,8 +24,10 @@ void test_start_stop(void)
     gs_stop();
 }
 
+static bool write_cb_called = false;
 static enum gs_rc write_cb(struct gs_task *task, gs_write_fn *write_fn)
 {
+    write_cb_called = true;
     printf("test::write_cb\n");
     static char const hello[] = "hello";
 
@@ -38,16 +40,20 @@ static enum gs_rc write_cb(struct gs_task *task, gs_write_fn *write_fn)
     {
         p += sz;
         size = (size_t)(size - sz);
+        if (size == 0)
+        {
+            rc = GS_EOF;
+            break;
+        }
     }
 
-    printf("RC: %d\n", rc);
-    printf("SIZE: %ld\n", size);
-    gs_sleep(1.0);
     return rc;
 }
 
+static bool when_done_cb_called = false;
 static void when_done_cb(struct gs_task *task)
 {
+    when_done_cb_called = true;
     (void)task;
     printf("test::when_done_cb\n");
 }
@@ -62,6 +68,9 @@ void test_send_timeout(void)
 
     struct gs_ctx *ctx = gs_ctx_new(sockfd, 2);
     if (!ctx) ERROR;
+
+    write_cb_called = false;
+    when_done_cb_called = false;
 
     struct gs_task *task = gs_ctx_send(ctx, 0, &write_cb, &when_done_cb, 0.001);
     if (gs_task_done(task)) ERROR;
@@ -79,13 +88,20 @@ void test_send_timeout(void)
     gs_stop();
 
     conn_del(conn);
-    return;
+
+    if (write_cb_called) ERROR;
+    if (!when_done_cb_called) ERROR;
 }
 
 void test_send_successfully(void)
 {
     struct conn *conn = conn_new(echo_ip(), echo_port());
     if (!conn) ERROR;
+    if (!conn_connect(conn))
+    {
+        conn_del(conn);
+        ERROR;
+    }
     int sockfd = conn_sockfd(conn);
 
     if (!gs_start()) ERROR;
@@ -93,11 +109,14 @@ void test_send_successfully(void)
     struct gs_ctx *ctx = gs_ctx_new(sockfd, 2);
     if (!ctx) ERROR;
 
-    struct gs_task *task = gs_ctx_send(ctx, 0, &write_cb, &when_done_cb, 1.0);
+    write_cb_called = false;
+    when_done_cb_called = false;
 
-    for (unsigned i = 0; i < 10; ++i)
+    struct gs_task *task = gs_ctx_send(ctx, 0, &write_cb, &when_done_cb, 5.0);
+
+    for (unsigned i = 0; i < 5; ++i)
     {
-        gs_sleep(1.0);
+        gs_sleep(0.1);
         (void)gs_work();
     }
     if (!gs_task_done(task)) ERROR;
@@ -107,12 +126,15 @@ void test_send_successfully(void)
     gs_stop();
 
     conn_del(conn);
+
+    if (!write_cb_called) ERROR;
+    if (!when_done_cb_called) ERROR;
 }
 
 int main(void)
 {
-    // test_start_stop();
+    test_start_stop();
     test_send_timeout();
-    // test_send_successfully();
+    test_send_successfully();
     return 0;
 }
