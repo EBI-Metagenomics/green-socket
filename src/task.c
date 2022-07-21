@@ -1,5 +1,6 @@
 #include "task.h"
 #include "ctx.h"
+#include "debug.h"
 #include "die.h"
 #include "gs/rc.h"
 #include "gs/task.h"
@@ -55,13 +56,13 @@ static void read_cb(struct ev_io *w, int revents)
 
     if (!(*task->read_cb)(task, read_fn))
     {
+        debug();
         gs_loop_timer_again_within(&task->watcher.timeout);
     }
     else
     {
-        gs_loop_io_stop_within(&task->watcher.read);
-        gs_loop_timer_stop_within(&task->watcher.timeout);
-        (*task->when_done_cb)(task);
+        debug();
+        gs_task_cancel(task);
     }
 }
 
@@ -72,13 +73,13 @@ static void write_cb(ev_io *w, int revents)
 
     if (!(*task->write_cb)(task, write_fn))
     {
+        debug();
         gs_loop_timer_again_within(&task->watcher.timeout);
     }
     else
     {
-        gs_loop_io_stop_within(&task->watcher.read);
-        gs_loop_timer_stop_within(&task->watcher.timeout);
-        (*task->when_done_cb)(task);
+        debug();
+        gs_task_cancel(task);
     }
 }
 
@@ -87,6 +88,7 @@ static void timeout_cb(ev_timer *w, int revents)
     if (EV_ERROR & revents) die("invalid event during timeout");
     struct gs_task *task = w->data;
 
+    debug();
     gs_task_cancel(task);
 }
 
@@ -96,8 +98,10 @@ void gs_task_init(struct gs_task *task, struct gs_ctx *ctx)
 
     task->ctx = ctx;
 
+    task->active = false;
     task->done = false;
-    atomic_flag_clear(&task->cancel_flag);
+    debug();
+    atomic_flag_clear(&task->cancel_once);
     task->cancelled = false;
     task->errno_value = 0;
 
@@ -123,8 +127,10 @@ void gs_task_reset(struct gs_task *task, double timeout)
 {
     task->data = 0;
 
+    task->active = false;
     task->done = false;
-    atomic_flag_clear(&task->cancel_flag);
+    debug();
+    atomic_flag_clear(&task->cancel_once);
     task->cancelled = false;
     task->errno_value = 0;
 
@@ -158,6 +164,7 @@ void gs_task_setup_recv(struct gs_task *task, void *data, gs_read_cb *read_cb,
 
 void gs_task_start(struct gs_task *task)
 {
+    task->active = true;
     task->watcher.timeout.repeat = task->timeout;
     gs_loop_timer_again(&task->watcher.timeout);
     if (task->type == GS_TASK_SEND)
@@ -177,7 +184,10 @@ bool gs_task_done(struct gs_task const *task) { return task->done; }
 
 void gs_task_cancel(struct gs_task *task)
 {
-    if (atomic_flag_test_and_set(&task->cancel_flag)) return;
+    debug();
+    if (atomic_flag_test_and_set(&task->cancel_once)) return;
+    if (!task->active) return;
+    debug();
     task->cancelled = true;
 
     if (task->type == GS_TASK_SEND)
@@ -185,6 +195,8 @@ void gs_task_cancel(struct gs_task *task)
     if (task->type == GS_TASK_RECV) gs_loop_io_stop_within(&task->watcher.read);
     gs_loop_timer_stop_within(&task->watcher.timeout);
     task->done = true;
+    (*task->when_done_cb)(task);
+    task->active = false;
 }
 
 bool gs_task_cancelled(struct gs_task const *task) { return task->cancelled; }

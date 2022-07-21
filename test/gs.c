@@ -95,7 +95,11 @@ void test_send_successfully(void)
 
     struct gs_task *task = gs_ctx_send(ctx, 0, &write_cb, &when_done_cb, 1.0);
 
-    gs_sleep(1.2);
+    for (unsigned i = 0; i < 10; ++i)
+    {
+        gs_sleep(1.0);
+        (void)gs_work();
+    }
     if (!gs_task_done(task)) ERROR;
     if (gs_task_cancelled(task)) ERROR;
 
@@ -107,7 +111,7 @@ void test_send_successfully(void)
 
 int main(void)
 {
-    test_start_stop();
+    // test_start_stop();
     test_send_timeout();
     // test_send_successfully();
     return 0;

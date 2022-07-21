@@ -22,9 +22,10 @@ struct gs_task
 
     struct gs_ctx *ctx;
 
+    bool active;
     bool done;
-    atomic_flag cancel_flag;
-    atomic_bool cancelled;
+    atomic_flag cancel_once;
+    bool cancelled;
     int errno_value;
 
     enum gs_task_type type;
