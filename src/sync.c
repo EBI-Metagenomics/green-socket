@@ -59,12 +59,12 @@ void gs_sync_unlock(struct sync *sync)
     (void)pthread_mutex_unlock(&sync->lock);
 }
 
-void gs_sync_signal(struct sync *sync)
+void gs_sync_wake(struct sync *sync)
 {
     (void)pthread_cond_signal(&sync->cond);
 }
 
-void gs_sync_wait_signal(struct sync *sync)
+void gs_sync_wait(struct sync *sync)
 {
     (void)pthread_cond_wait(&sync->cond, &sync->lock);
 }

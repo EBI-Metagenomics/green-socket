@@ -19,14 +19,9 @@ void test_start_stop(void)
     if (!gs_start()) ERROR;
     gs_stop();
 
-    // if (!gs_start()) ERROR;
-    // gs_work();
-    // gs_stop();
-    //
-    // if (!gs_start()) ERROR;
-    // gs_work();
-    // gs_work();
-    // gs_stop();
+    if (!gs_start()) ERROR;
+    gs_work();
+    gs_stop();
 }
 
 static enum gs_rc write_cb(struct gs_task *task, gs_write_fn *write_fn)
@@ -72,16 +67,11 @@ void test_send_timeout(void)
     if (gs_task_done(task)) ERROR;
     if (gs_task_cancelled(task)) ERROR;
 
-    unsigned count = 0;
-    while (count < 2)
+    for (unsigned i = 0; i < 5; ++i)
     {
-        count += gs_work();
-        printf("count:%d \n", count);
-        gs_sleep(0.01);
+        gs_sleep(0.001);
+        (void)gs_work();
     }
-    printf("Ponto 2\n");
-    fflush(stdout);
-
     if (!gs_task_done(task)) ERROR;
     if (!gs_task_cancelled(task)) ERROR;
 
@@ -89,6 +79,7 @@ void test_send_timeout(void)
     gs_stop();
 
     conn_del(conn);
+    return;
 }
 
 void test_send_successfully(void)
